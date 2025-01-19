@@ -3,251 +3,219 @@ import json
 import random
 import string
 import time
-from datetime import datetime, timedelta
-from collections import defaultdict, deque
-
+from collections import defaultdict
 from flask import Flask, request, jsonify, Response, render_template
 from flask_cors import CORS
 import redis
 import gevent
 from gevent.queue import Queue
+from gevent import pywsgi
+from geventwebsocket.handler import WebSocketHandler
 
 app = Flask(__name__, static_folder=None)
 CORS(app)
 
-# ------------------------------------------------------------------------
-# 1) Redis Connection Setup
-# ------------------------------------------------------------------------
+# --------------------------
+# 1) Redis Config
+# --------------------------
 REDIS_HOST = os.environ.get('REDIS_HOST', 'redis')
 REDIS_PORT = int(os.environ.get('REDIS_PORT', '6379'))
 redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
-SESSION_TTL_SECONDS = 3600  # e.g. 1 hour
+SESSION_TTL_SECONDS = 3600  # 1 hour (adjust as needed)
 
-# ------------------------------------------------------------------------
-# 2) SSE Connections per session code (in-memory)
-# ------------------------------------------------------------------------
-# For each session code, we'll keep a set of subscribers, each a Queue.
-subscribers = defaultdict(set)
+# SSE subscriptions: dict[(code, participantId)] -> set(Queue)
+user_sse_subs = defaultdict(set)
 
+# --------------------------
+# 2) Helper Functions
+# --------------------------
 def generate_code(length=6, numeric=True):
-    """Generate a random code (6-digit numeric by default)."""
+    """Generate a random code (default 6-digit numeric)."""
     chars = string.digits if numeric else (string.ascii_letters + string.digits)
     return ''.join(random.choices(chars, k=length))
 
 def generate_participant_id():
-    """Generate a short random ID for participants."""
+    """Generate an 8-char random ID for participants."""
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
 
+def get_session_data(code):
+    """Fetch the session data from Redis; return None if not found."""
+    session_key = f"session:{code}"
+    raw = redis_client.get(session_key)
+    if not raw:
+        return None
+    return json.loads(raw)
+
+def save_session_data(code, data):
+    """Save session data back to Redis, renewing TTL."""
+    session_key = f"session:{code}"
+    redis_client.setex(session_key, SESSION_TTL_SECONDS, json.dumps(data))
+
+# --------------------------
+# 3) Routes
+# --------------------------
 @app.route('/')
 def index():
-    """Serve a minimal homepage if someone visits root."""
+    """Serve index.html from templates."""
     return render_template('index.html')
 
-# ------------------------------------------------------------------------
-# 3) Session Management
-# ------------------------------------------------------------------------
 @app.route('/api/session', methods=['POST'])
 def create_session():
     """
-    Creates a new ephemeral session with:
-      - A 6-digit session code
-      - A separate admin code (4-digit) for privileged actions
-    Stored in Redis with a TTL.
-    Returns JSON: { code, adminCode, expires_in_seconds }
+    Create a new ephemeral session with a random code.
+    We do not necessarily need an admin code for this scenario,
+    but you can add one if needed.
     """
-    code = generate_code()  # e.g. "123456"
-    admin_code = generate_code(4)  # e.g. "7890"
-    session_key = f"session:{code}"
-
+    code = generate_code()
     session_data = {
         "created_at": time.time(),
-        "admin_code": admin_code,
-        "messages": [],
-        "participants": {}
+        "participants": {},   # participantId -> displayName
+        "messages": []        # list of { id, from, to, text, timestamp }
     }
-    # Store in Redis (JSON), set a TTL
-    redis_client.setex(session_key, SESSION_TTL_SECONDS, json.dumps(session_data))
-
+    save_session_data(code, session_data)
     return jsonify({
         "code": code,
-        "adminCode": admin_code,
         "expires_in_seconds": SESSION_TTL_SECONDS
     })
 
 @app.route('/api/session/<code>/join', methods=['POST'])
 def join_session(code):
-    """Join an existing session with the given code, returns participantId."""
-    session_key = f"session:{code}"
-    data = redis_client.get(session_key)
-    if not data:
+    """Join an existing session; assign a participantId and store displayName."""
+    sdata = get_session_data(code)
+    if not sdata:
         return jsonify({"error": "Session not found or expired"}), 404
-
-    session_data = json.loads(data)
 
     participant_id = generate_participant_id()
     display_name = request.json.get('displayName') or participant_id
-    session_data["participants"][participant_id] = display_name
 
-    # Persist updated session (renew TTL)
-    redis_client.setex(session_key, SESSION_TTL_SECONDS, json.dumps(session_data))
+    sdata["participants"][participant_id] = display_name
+    save_session_data(code, sdata)
 
     return jsonify({
         "participantId": participant_id,
         "displayName": display_name
     })
 
-# ------------------------------------------------------------------------
-# 4) Posting & Deleting Messages
-# ------------------------------------------------------------------------
+@app.route('/api/session/<code>/participants', methods=['GET'])
+def get_participants(code):
+    """Return the list of participants (ID->Name)."""
+    sdata = get_session_data(code)
+    if not sdata:
+        return jsonify({"error": "Session not found or expired"}), 404
+    return jsonify({"participants": sdata["participants"]})
+
 @app.route('/api/session/<code>/message', methods=['POST'])
 def post_message(code):
-    """Post a new warm shower message."""
-    session_key = f"session:{code}"
-    data = redis_client.get(session_key)
-    if not data:
-        return jsonify({"error": "Session not found or expired."}), 404
+    """
+    Post a one-time message from -> to.
+    'from' -> participantId of sender
+    'to'   -> participantId of receiver
+    text   -> the warm shower message
+    Must check that there's no existing message from->to in session_data["messages"].
+    """
+    sdata = get_session_data(code)
+    if not sdata:
+        return jsonify({"error": "Session not found or expired"}), 404
 
-    session_data = json.loads(data)
+    from_id = request.json.get('from')
+    to_id = request.json.get('to')
+    text = (request.json.get('text') or "").strip()
 
-    participant_id = request.json.get('participantId')
-    text = request.json.get('text', '').strip()
-    if not participant_id or not text:
-        return jsonify({"error": "Missing participantId or text"}), 400
+    if not from_id or not to_id or not text:
+        return jsonify({"error": "Missing from, to, or text"}), 400
 
-    display_name = session_data["participants"].get(participant_id, "Unknown")
-    message_obj = {
-        "participantId": participant_id,
-        "displayName": display_name,
+    # Validate participants
+    if from_id not in sdata["participants"] or to_id not in sdata["participants"]:
+        return jsonify({"error": "Invalid participants"}), 400
+
+    # Check if message from->to already exists
+    for msg in sdata["messages"]:
+        if msg["from"] == from_id and msg["to"] == to_id:
+            return jsonify({"error": "You have already messaged this participant"}), 400
+
+    # Create new message
+    msg_id = int(time.time() * 1000)  # or use a separate counter
+    new_msg = {
+        "id": msg_id,
+        "from": from_id,
+        "to": to_id,
         "text": text,
         "timestamp": time.time()
     }
-    session_data["messages"].append(message_obj)
+    sdata["messages"].append(new_msg)
+    save_session_data(code, sdata)
 
-    # Update in Redis
-    redis_client.setex(session_key, SESSION_TTL_SECONDS, json.dumps(session_data))
+    # Broadcast SSE to the receiver only, omitting "from"
+    broadcast_sse_to_user(code, to_id, {
+        "text": text,
+        "timestamp": new_msg["timestamp"]
+    })
 
-    # Notify SSE subscribers
-    broadcast_sse(code, message_obj)
+    return jsonify({"status": "ok", "message": new_msg})
 
-    return jsonify({"status": "ok", "message": message_obj})
-
-@app.route('/api/session/<code>/message/<int:msg_index>', methods=['DELETE'])
-def delete_message(code, msg_index):
+# --------------------------
+# 4) SSE Logic
+# --------------------------
+@app.route('/api/session/<code>/stream/<participant_id>', methods=['GET'])
+def sse_stream(code, participant_id):
     """
-    Delete a message by its index in the session's message list.
-    Requires ?adminCode=xxxx
+    SSE endpoint for a specific participant.
+    We'll push only messages addressed to them (omitting 'from').
     """
-    admin_code = request.args.get('adminCode')
-    if not admin_code:
-        return jsonify({"error": "adminCode is required"}), 400
-
-    session_key = f"session:{code}"
-    data = redis_client.get(session_key)
-    if not data:
-        return jsonify({"error": "Session not found or expired."}), 404
-
-    session_data = json.loads(data)
-
-    if session_data["admin_code"] != admin_code:
-        return jsonify({"error": "Invalid admin code"}), 403
-
-    messages_list = session_data.get("messages", [])
-    if msg_index < 0 or msg_index >= len(messages_list):
-        return jsonify({"error": "Invalid message index"}), 400
-
-    # Remove the message
-    removed_msg = messages_list.pop(msg_index)
-    # Update in Redis
-    redis_client.setex(session_key, SESSION_TTL_SECONDS, json.dumps(session_data))
-
-    return jsonify({"deleted": removed_msg})
-
-# ------------------------------------------------------------------------
-# 5) SSE Streaming
-# ------------------------------------------------------------------------
-# We'll store a set of subscriber queues per session code.
-# Each queue receives new messages (via broadcast_sse).
-
-@app.route('/api/session/<code>/stream', methods=['GET'])
-def sse_stream(code):
-    """
-    SSE endpoint: Clients connect to get real-time messages.
-    We'll keep a subscriber queue, yield events as they come in.
-    """
-    # Check if session is valid
-    session_key = f"session:{code}"
-    data = redis_client.get(session_key)
-    if not data:
+    sdata = get_session_data(code)
+    if not sdata:
         return jsonify({"error": "Session not found or expired"}), 404
 
-    # Create a queue for this client
-    q = Queue()
-    subscribers[code].add(q)
+    if participant_id not in sdata["participants"]:
+        return jsonify({"error": "Invalid participant"}), 400
 
-    # Immediately send existing messages as "catch-up"
-    session_data = json.loads(data)
-    for msg in session_data["messages"]:
-        q.put(msg)
+    # Make a dedicated queue for this user
+    q = Queue()
+    user_sse_subs[(code, participant_id)].add(q)
+
+    # Send any existing messages that were addressed to them
+    for msg in sdata["messages"]:
+        if msg["to"] == participant_id:
+            q.put({"text": msg["text"], "timestamp": msg["timestamp"]})
 
     def gen():
-        # Stream data from the queue to the client
         while True:
-            # If queue empty, block until new message arrives
-            msg = q.get()
-            yield f"data: {json.dumps(msg)}\n\n"
+            payload = q.get()
+            yield f"data: {json.dumps(payload)}\n\n"
 
-    # Return a streaming response
     return Response(gen(), mimetype='text/event-stream')
 
-def broadcast_sse(code, message_obj):
-    """
-    Push newly posted messages to all SSE subscriber queues for `code`.
-    """
-    if code not in subscribers:
-        return
-    for q in list(subscribers[code]):
-        q.put(message_obj)
+def broadcast_sse_to_user(code, participant_id, payload):
+    """Push a new message to all SSE queues for (code, participant_id)."""
+    if (code, participant_id) in user_sse_subs:
+        for q in list(user_sse_subs[(code, participant_id)]):
+            q.put(payload)
 
-# ------------------------------------------------------------------------
-# 6) End Session (Manual)
-# ------------------------------------------------------------------------
+# --------------------------
+# 5) Run & (Optional) Cleanup
+# --------------------------
 @app.route('/api/session/<code>/end', methods=['POST'])
 def end_session(code):
     """
-    Manually end the session. Requires ?adminCode=xxxx
-    - Removes the session key from Redis
-    - Clears SSE subscribers
+    Optional endpoint to manually end a session early (no admin code needed in this example).
+    This will remove the session key from Redis and clear SSE subscriptions.
     """
-    admin_code = request.args.get('adminCode')
-    if not admin_code:
-        return jsonify({"error": "adminCode is required"}), 400
-
-    session_key = f"session:{code}"
-    data = redis_client.get(session_key)
-    if not data:
-        return jsonify({"error": "Session not found or already expired."}), 404
-
-    session_data = json.loads(data)
-    if session_data["admin_code"] != admin_code:
-        return jsonify({"error": "Invalid admin code"}), 403
+    sdata = get_session_data(code)
+    if not sdata:
+        return jsonify({"error": "Session not found or already expired"}), 404
 
     # Delete from Redis
-    redis_client.delete(session_key)
-    # Clear SSE subscribers
-    subscribers.pop(code, None)
+    redis_client.delete(f"session:{code}")
+    # Clear SSE subscriptions
+    # We'll remove all participant-based queues for this code
+    for (c, pid) in list(user_sse_subs.keys()):
+        if c == code:
+            user_sse_subs.pop((c, pid), None)
 
     return jsonify({"status": "session ended"})
 
-# ------------------------------------------------------------------------
-# 7) Running the App
-# ------------------------------------------------------------------------
 if __name__ == '__main__':
-    # Use gevent for concurrency (enables streaming better)
-    from gevent import pywsgi
-    from geventwebsocket.handler import WebSocketHandler
-
-    port = 5000
-    print(f"Running server on port {port}...")
-    server = pywsgi.WSGIServer(('0.0.0.0', port), app, handler_class=WebSocketHandler)
+    print("Starting Warm Shower on port 5000...")
+    server = pywsgi.WSGIServer(('0.0.0.0', 5000), app, handler_class=WebSocketHandler)
     server.serve_forever()
