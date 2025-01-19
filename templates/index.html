@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Warm Shower App</title>
+  <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
+<body x-data="warmShower()">
+
+  <h1>Ephemeral Warm Shower</h1>
+
+  <!-- CREATE SESSION BLOCK (Organizer) -->
+  <div style="border: 1px solid #999; padding: 1rem; margin-bottom: 1rem;" x-show="!sessionCode">
+    <h2>Create a New Session (Organizer)</h2>
+    <button @click="createSession()">Create Session</button>
+    <template x-if="createdSession.code">
+      <p>
+        <strong>Session Code:</strong> <span x-text="createdSession.code"></span><br/>
+        <strong>Admin Code:</strong> <span x-text="createdSession.adminCode"></span>
+      </p>
+    </template>
+  </div>
+
+  <!-- JOIN SESSION BLOCK (Participants) -->
+  <div style="border: 1px solid #999; padding: 1rem; margin-bottom: 1rem;">
+    <h2>Join Session</h2>
+    <label>Session Code:</label>
+    <input type="text" x-model="joinCode" placeholder="6-digit code" />
+    <br/>
+    <label>Your Name (Optional):</label>
+    <input type="text" x-model="displayName" />
+    <br/>
+    <button @click="join()">Join Session</button>
+  </div>
+
+  <!-- MAIN MESSAGES UI -->
+  <div style="border: 1px solid #999; padding: 1rem;" x-show="joinedSession">
+    <h2>Session: <span x-text="sessionCode"></span></h2>
+
+    <div style="max-height: 300px; overflow-y: auto; border: 1px solid #ccc; margin-bottom: 1rem; padding: 0.5rem;">
+      <template x-for="(msg, idx) in messages" :key="idx">
+        <div style="margin-bottom: 0.5rem;">
+          <strong x-text="msg.displayName"></strong>:
+          <span x-text="msg.text"></span>
+          <!-- If admin, show a delete button -->
+          <button 
+            style="float: right; font-size: 0.8rem;"
+            x-show="isAdmin"
+            @click="deleteMessage(idx)"
+          >Delete</button>
+        </div>
+      </template>
+    </div>
+
+    <div>
+      <input type="text" x-model="messageText" placeholder="Write a warm shower message" />
+      <button @click="sendMessage()">Send</button>
+    </div>
+
+    <!-- If admin, show End Session -->
+    <div style="margin-top: 1rem;" x-show="isAdmin">
+      <button style="background-color: red; color: white;" @click="endSession()">End Session</button>
+    </div>
+  </div>
+
+<script>
+function warmShower() {
+  return {
+    // Data
+    sessionCode: "",         // 6-digit session code
+    adminCode: "",           // 4-digit admin code
+    createdSession: {},
+    joinCode: "",
+    displayName: "",
+    participantId: null,
+    joinedSession: false,
+    messages: [],
+    messageText: "",
+
+    // Helpers
+    get isAdmin() {
+      // Admin if the local user has an adminCode that matches the session's admin code
+      return (this.adminCode && this.adminCode === this.createdSession.adminCode);
+    },
+
+    // Methods
+    async createSession() {
+      try {
+        const res = await fetch('/api/session', { method: 'POST' });
+        const data = await res.json();
+        this.createdSession = data; // {code, adminCode, expires_in_seconds}
+        alert(`Session created!\nSession Code: ${data.code}\nAdmin Code: ${data.adminCode}`);
+      } catch (err) {
+        console.error(err);
+      }
+    },
+
+    async join() {
+      if (!this.joinCode) {
+        alert("Please enter a session code.");
+        return;
+      }
+      try {
+        // Join the session
+        const res = await fetch(`/api/session/${this.joinCode}/join`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ displayName: this.displayName })
+        });
+        if (!res.ok) {
+          alert("Session not found or expired.");
+          return;
+        }
+        const data = await res.json();
+        this.participantId = data.participantId;
+        // If the user is also the session creator, we keep the adminCode from createdSession
+        // But let's assume a separate scenario: they can store it somewhere else
+        this.sessionCode = this.joinCode;
+        this.joinedSession = true;
+
+        // Start SSE stream
+        this.startSSE();
+
+        // Try fetching session data to see if we have an admin code (if the user was the organizer)
+        if (this.createdSession.code === this.sessionCode) {
+          // We are the admin in the same browser context
+          this.adminCode = this.createdSession.adminCode;
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    },
+
+    startSSE() {
+      const evtSource = new EventSource(`/api/session/${this.sessionCode}/stream`);
+      evtSource.onmessage = (event) => {
+        // each SSE message is a new or existing message
+        const msg = JSON.parse(event.data);
+        // push or update the message list
+        this.messages.push(msg);
+      };
+      evtSource.onerror = (err) => {
+        console.warn("SSE connection error:", err);
+      };
+    },
+
+    async sendMessage() {
+      if (!this.messageText) return;
+      try {
+        await fetch(`/api/session/${this.sessionCode}/message`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            participantId: this.participantId,
+            text: this.messageText
+          })
+        });
+        this.messageText = "";
+      } catch (err) {
+        console.error(err);
+      }
+    },
+
+    async deleteMessage(msgIndex) {
+      if (!this.isAdmin) {
+        alert("You are not admin!");
+        return;
+      }
+      try {
+        const res = await fetch(
+          `/api/session/${this.sessionCode}/message/${msgIndex}?adminCode=${this.adminCode}`,
+          { method: 'DELETE' }
+        );
+        if (!res.ok) {
+          const errData = await res.json();
+          alert("Delete failed: " + (errData.error || 'unknown error'));
+          return;
+        }
+        // Reflect local removal
+        this.messages.splice(msgIndex, 1);
+      } catch (err) {
+        console.error(err);
+      }
+    },
+
+    async endSession() {
+      if (!this.isAdmin) {
+        alert("You are not admin!");
+        return;
+      }
+      try {
+        const res = await fetch(`/api/session/${this.sessionCode}/end?adminCode=${this.adminCode}`, {
+          method: 'POST'
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          alert("End session failed: " + (errData.error || 'unknown error'));
+          return;
+        }
+        alert("Session ended. All data is purged.");
+        window.location.reload(); // reset UI
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  }
+}
+</script>
+
+</body>
+</html>
