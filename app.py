@@ -81,6 +81,12 @@ def index():
     logger.info("Serving index.html")
     return render_template('index.html')
 
+
+# Route for privacy-policy.html
+@app.route('/privacy-policy.html')
+def privacy_policy():
+    return render_template('privacy-policy.html')
+
 @app.route('/api/session', methods=['POST'])
 def create_session():
     """
