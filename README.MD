@@ -136,3 +136,7 @@ my-warmshower/
 3. Make changes and submit a PR  
 
 Feedback, bug reports, and feature requests are welcome!
+
+### Donating
+
+To cover hosting costs, the best option is to send [BTC](https://btcscan.org/address/35i1Gaf7Y24tEGceUHZtSSt618eHZQjfh2)
