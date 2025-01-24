@@ -2,16 +2,47 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>One-to-One Anonymous Warm Shower (With Logging)</title>
+  <title>Warme Dusche Online</title>
   <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 </head>
-<body x-data="warmShowerApp()">
 
-  <h1>Anonymous Warm Shower (No History / P2P) - Debug Logging</h1>
+
+<body x-data="warmShowerApp()">
+<!-- 4 gdpr top of index.html body -->
+<div id="cookieBanner" style="position:fixed; bottom:0; left:0; right:0; background:#f8e5ab; padding:10px; z-index:9999; font-family:sans-serif;">
+  <p style="margin:0;">
+    We use limited cookies/identifiers to facilitate anonymous messaging. 
+    No personal data is stored. 
+    
+    <a href="./privacy-policy.html" target="_blank">Learn more</a>
+    <button onclick="hideBanner()">OK</button>
+  </p>
+</div>
+
+<script>
+  function hideBanner() {
+    document.getElementById('cookieBanner').style.display = 'none';
+    // optionally set a cookie or localStorage flag so it doesn't show again
+    localStorage.setItem('cookieAccepted', 'true');
+  }
+
+  // On load, check if user accepted previously
+  if (localStorage.getItem('cookieAccepted') === 'true') {
+    document.getElementById('cookieBanner').style.display = 'none';
+  }
+</script>
+<!-- insert gdpr - bottom of index.html body -->
+  <h1>Warme Worte Dusche</h1>
 
   <!-- CREATE SESSION -->
   <div style="border:1px solid #999; padding:1rem; margin-bottom:1rem;" x-show="!sessionCode">
     <h2>Create New Session</h2>
+    <h3>How-To: </h3>
+    <p>1. Click "Create Session" to generate a 6-digit code.</p>
+    <p>2. Share the code with friends/colleagues to join your session.</p>
+    <p>3. Click "Join Session" to enter a code and join a session.</p>
+    <h3>About:</h3>
+    <p>Share (positive) feedback within your project/group completly anonymous!</p>
     <button @click="createSession">Create Session</button>
     <template x-if="createdSession.code">
       <p>
