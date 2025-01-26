@@ -1,0 +1,27 @@
+{
+	"name": "warmshoweronline",
+	"version": "1.0.0",
+	"description": "This repository hosts a lightweight, ephemeral web application for sending positive, anonymous messages (a.k.a. warm showers) among team members.",
+	"type": "module",
+	"scripts": {
+		"dev": "vite",
+		"build": "tsc && vite build"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/drunkdev1991/WarmShowerOnline.git"
+	},
+	"author": "",
+	"license": "ISC",
+	"bugs": {
+		"url": "https://github.com/drunkdev1991/WarmShowerOnline/issues"
+	},
+	"homepage": "https://github.com/drunkdev1991/WarmShowerOnline#readme",
+	"devDependencies": {
+		"vite": "^6.0.11",
+		"typescript": "^5.7.3",
+		"@tailwindcss/cli": "^4.0.0",
+		"@tailwindcss/vite": "^4.0.0",
+		"tailwindcss": "^4.0.0"
+	}
+}
