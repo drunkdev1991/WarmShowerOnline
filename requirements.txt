@@ -1,5 +1,5 @@
 Flask==2.2.5
 Flask-Cors==3.0.10
 redis==4.5.4
-gevent==22.10.2
+gevent==24.11.1
 gevent-websocket==0.10.1
