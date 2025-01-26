@@ -3,7 +3,7 @@ import Alpine, { AlpineComponent } from "alpinejs"
 // @ts-ignore
 window.Alpine = Alpine
 
-const API_URL = "http://localhost:1337"
+const API_URL = "http://localhost:5000"
 
 const fetchApi = async (url: string, options?: RequestInit) => {
 	return await fetch(`${ API_URL }${ url }`, {
