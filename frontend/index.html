@@ -59,7 +59,7 @@
 			<!-- CREATE SESSION -->
 			<div class="grid grid-cols-2 flex-row flex-wrap gap-12">
 				<section
-					class="flex flex-col gap-4 rounded-lg border border-neutral-950/20 bg-amber-100 overflow-hidden shadow-lg w-full md:w-1/2"
+					class="flex flex-col gap-4 rounded-lg border border-neutral-950/20 bg-amber-100 overflow-hidden shadow-lg w-full"
 					x-show="!sessionCode"
 				>
 					<header class="flex flex-col px-6 py-4 border-b border-neutral-950/20 bg-amber-200">
@@ -78,7 +78,9 @@
 						</div>
 					</div>
 
-					<footer class="flex flex-col gap-4 items-center justify-center py-4 border-t border-neutral-950/20">
+					<footer
+						class="flex flex-col gap-4 items-center justify-center py-4 border-t border-neutral-950/20 mt-auto"
+					>
 						<template x-if="!sessionCode">
 							<button
 								class="bg-rose-500 px-3 py-2 cursor-pointer font-bold rounded-md text-amber-50 flex flex-row gap-2 items-center justify-center hover:bg-rose-700"
@@ -95,26 +97,55 @@
 								<span
 									x-text="createdSession.code"
 									class="px-1 py-0.5 bg-amber-900/10 rounded-md font-mono text-rose-600"
-								>
-								dksjnakjdnaskjnaskjdnskdjndskjn
-							</span>
+								></span>
 							</p>
 						</template>
 					</footer>
 				</section>
 
 				<!-- JOIN SESSION -->
-				<section>
-					<div style="border:1px solid #999; padding:1rem; margin-bottom:1rem;">
-						<h2>Join Session</h2>
-						<label>Session Code:</label>
-						<input type="text" x-model="joinCode" placeholder="6-digit code">
-						<br />
-						<label>Your Display Name (optional):</label>
-						<input type="text" x-model="displayName" placeholder="Alice, Bob, etc.">
-						<br />
-						<button @click="join">Join Session</button>
+				<section
+					class="flex flex-col gap-4 rounded-lg border border-neutral-950/20 bg-amber-100 overflow-hidden shadow-lg w-full"
+				>
+					<header class="flex flex-col px-6 py-4 border-b border-neutral-950/20 bg-amber-200">
+						<h2 class="font-bold">Join Existing Session</h2>
+					</header>
+
+					<div class="flex flex-col gap-4 px-6">
+						<div class="flex flex-col gap-2">
+							<label>Session Code:</label>
+
+							<input
+								class="font-mono border border-neutral-950/20 rounded-md px-3 py-1 placeholder-amber-950/50 focus:bg-amber-50/75"
+								type="text"
+								x-model="joinCode"
+								placeholder="6-digit code"
+							/>
+						</div>
+
+						<div class="flex flex-col gap-2">
+							<label>Your Display Name (optional):</label>
+							<input
+								type="text"
+								x-model="displayName"
+								placeholder="Alice, Bob, etc."
+								class="font-mono border border-neutral-950/20 rounded-md px-3 py-1 placeholder-amber-950/50 focus:bg-amber-50/75"
+							>
+						</div>
 					</div>
+
+					<footer
+						class="flex flex-col gap-4 items-center justify-center py-4 border-t border-neutral-950/20 mt-auto"
+					>
+						<button
+							class="bg-rose-500 px-3 py-2 cursor-pointer font-bold rounded-md text-amber-50 flex flex-row gap-2 items-center justify-center hover:bg-rose-700"
+							@click="join"
+							x-disabled="!joinCode"
+						>
+							<img src="/icons/icon-add.svg" alt="Join Session" class="w-3 h-3" />
+							Join Session
+						</button>
+					</footer>
 
 					<!-- MAIN UI (If Joined) -->
 					<div style="border:1px solid #999; padding:1rem;" x-show="joinedSession">
