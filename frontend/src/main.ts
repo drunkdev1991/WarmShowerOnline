@@ -1,9 +1,18 @@
-import Alpine from "alpinejs"
+import Alpine, { AlpineComponent } from "alpinejs"
 
 // @ts-ignore
 window.Alpine = Alpine
 
-function warmShowerApp () {
+const API_URL = "http://localhost:5000"
+
+const fetchApi = async (url: string, options?: RequestInit) => {
+	return await fetch(`${ API_URL }${ url }`, {
+		headers: { "Content-Type": "application/json" },
+		...options,
+	})
+}
+
+function warmShowerApp (): AlpineComponent<any> {
 	return {
 		// Reactive Data
 		sessionCode: "",
@@ -21,7 +30,7 @@ function warmShowerApp () {
 		async createSession () {
 			console.log("[Client] createSession() called")
 			try {
-				const res = await fetch("/api/session", { method: "POST" })
+				const res = await fetchApi("/api/session", { method: "POST" })
 				const data = await res.json()
 				console.log("[Client] Session created:", data)
 				this.createdSession = data
@@ -39,7 +48,7 @@ function warmShowerApp () {
 				return
 			}
 			try {
-				const joinRes = await fetch(`/api/session/${ this.joinCode }/join`, {
+				const joinRes = await fetchApi(`/api/session/${ this.joinCode }/join`, {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify({ displayName: this.displayName }),
@@ -80,7 +89,7 @@ function warmShowerApp () {
 		async fetchParticipants () {
 			console.log("[Client] fetchParticipants() called, sessionCode =", this.sessionCode)
 			try {
-				const res = await fetch(`/api/session/${ this.sessionCode }/participants`)
+				const res = await fetchApi(`/api/session/${ this.sessionCode }/participants`)
 				if (!res.ok) {
 					console.warn("[Client] fetchParticipants() => session not found/expired?")
 					return
@@ -123,7 +132,7 @@ function warmShowerApp () {
 		},
 
 		// ====== SEND MESSAGE ======
-		async sendMessageTo (targetPid) {
+		async sendMessageTo (targetPid: string) {
 			console.log("[Client] sendMessageTo() => targetPid =", targetPid)
 			if (this.messagesSent[targetPid]) {
 				alert("You have already messaged this participant.")
@@ -135,7 +144,7 @@ function warmShowerApp () {
 				return
 			}
 			try {
-				const res = await fetch(`/api/session/${ this.sessionCode }/message`, {
+				const res = await fetchApi(`/api/session/${ this.sessionCode }/message`, {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify({
@@ -176,7 +185,7 @@ function warmShowerApp () {
 		async endSession () {
 			console.log("[Client] endSession() called")
 			try {
-				const res = await fetch(`/api/session/${ this.sessionCode }/end`, { method: "POST" })
+				const res = await fetchApi(`/api/session/${ this.sessionCode }/end`, { method: "POST" })
 				if (!res.ok) {
 					const errData = await res.json()
 					alert("Failed to end session: " + (errData.error || "Unknown"))
