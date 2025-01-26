@@ -1,5 +1,5 @@
 @import "tailwindcss";
 
 body {
-	  @apply bg-amber-50 p-6 text-amber-950;
+	  @apply bg-amber-50 p-12 text-amber-950;
 }
