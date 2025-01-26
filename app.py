@@ -76,11 +76,14 @@ def save_session_data(code, data):
 # --------------------------
 # 5) Routes
 # --------------------------
-# TODO: fix serving
 @app.route('/<path:path>')
-def index():
-    logger.info("Serving static files")
-    return send_from_directory('frontend/dist', path)
+def index(path):
+    logger.info("Serving static file: %s", path)
+
+    if path == '/' or path == '':
+        return send_from_directory('static', 'index.html')
+
+    return send_from_directory('static', path)
 
 
 # Route for privacy-policy.html
