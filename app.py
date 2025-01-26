@@ -6,7 +6,7 @@ import time
 import logging
 from collections import defaultdict
 
-from flask import Flask, request, jsonify, Response, render_template
+from flask import Flask, request, jsonify, Response, render_template, send_from_directory
 from flask_cors import CORS
 import redis
 import gevent
@@ -76,10 +76,11 @@ def save_session_data(code, data):
 # --------------------------
 # 5) Routes
 # --------------------------
-@app.route('/')
+# TODO: fix serving
+@app.route('/<path:path>')
 def index():
-    logger.info("Serving index.html")
-    return render_template('index.html')
+    logger.info("Serving static files")
+    return send_from_directory('frontend/dist', path)
 
 
 # Route for privacy-policy.html
