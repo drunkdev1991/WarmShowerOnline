@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<title>Warme Dusche Online</title>
+
+		<link rel="stylesheet" href="src/styles/global.css" />
+	</head>
+
+	<body x-data="warmShowerApp">
+		<!-- 4 gdpr top of index.html body -->
+		<div
+			id="cookieBanner"
+			style="position:fixed; bottom:0; left:0; right:0; background:#f8e5ab; padding:10px; z-index:9999; font-family:sans-serif;"
+		>
+			<p style="margin:0;">
+				We use limited cookies/identifiers to facilitate anonymous messaging.
+				No personal data is stored.
+
+				<a href="templates/privacy-policy.html" target="_blank">Learn more</a>
+				<button onclick="hideBanner()">OK</button>
+			</p>
+		</div>
+
+		<script>
+			function hideBanner () {
+				document.getElementById("cookieBanner").style.display = "none"
+				// optionally set a cookie or localStorage flag so it doesn't show again
+				localStorage.setItem("cookieAccepted", "true")
+			}
+
+			// On load, check if user accepted previously
+			if (localStorage.getItem("cookieAccepted") === "true") {
+				document.getElementById("cookieBanner").style.display = "none"
+			}
+		</script>
+
+		<main class="w-full max-w-6xl mx-auto flex flex-col gap-12">
+			<!-- insert gdpr - bottom of index.html body -->
+
+			<a
+				class="fixed bottom-6 left-1/2 -translate-x-1/2 font-bold font-mono flex flex-row items-center gap-2 text-sm text-neutral-900 bg-amber-950/10 py-1 px-2 rounded-md border border-transparent hover:border-neutral-400"
+				href="https://github.com/drunkdev1991/WarmShowerOnline" target="_blank"
+			>
+				<img src="/icons/icon-github.svg" alt="Github/" class="w-4 h-4" />
+				<span>
+					GitHub
+				</span>
+			</a>
+
+			<header class="flex flex-col gap-2 items-center justify-center max-w-md mx-auto text-center">
+				<img src="/icons/icon-shower.svg" alt="Shower Icon" class="w-32 h-32" />
+				<h1 class="text-3xl font-bold">Warme Worte Dusche</h1>
+				<p class="italic text-amber-800">
+					Share (positive) feedback within your project/group completely anonymous!
+				</p>
+			</header>
+
+			<!-- CREATE SESSION -->
+			<template x-if="!sessionCode">
+				<div class="grid grid-cols-2 flex-row flex-wrap gap-12">
+					<section
+						class="flex flex-col gap-4 rounded-lg border border-neutral-950/20 bg-amber-100 overflow-hidden shadow-lg w-full"
+						x-show="!sessionCode"
+					>
+						<header class="flex flex-col px-6 py-4 border-b border-neutral-950/20 bg-amber-200">
+							<h2 class="font-bold">Create New Session</h2>
+						</header>
+
+						<div class="flex flex-col gap-3 px-6 py-2">
+							<div class="flex flex-col gap-4">
+								<h3 class="font-semibold">How-To:</h3>
+
+								<ol class="list-decimal list-inside">
+									<li>Click "Create Session" to generate a 6-digit code.</li>
+									<li>Share the code with friends/colleagues to join your session.</li>
+									<li>Click "Join Session" to enter a code and join a session.</li>
+								</ol>
+							</div>
+						</div>
+
+						<footer
+							class="flex flex-col gap-4 items-center justify-center py-4 border-t border-neutral-950/20 mt-auto"
+						>
+							<template x-if="!sessionCode">
+								<button
+									class="bg-rose-500 px-3 py-2 cursor-pointer font-bold rounded-md text-amber-50 flex flex-row gap-2 items-center justify-center hover:bg-rose-700"
+									@click="createSession"
+								>
+									<img src="/icons/icon-add.svg" alt="Create Session" class="w-3 h-3" />
+									Create Session
+								</button>
+							</template>
+
+							<template x-if="createdSession.code">
+								<p class="flex flex-row gap-2 items-center justify-center text-sm">
+									<strong>Session Code:</strong>
+									<span
+										x-text="createdSession.code"
+										class="px-1 py-0.5 bg-amber-900/10 rounded-md font-mono text-rose-600"
+									></span>
+								</p>
+							</template>
+						</footer>
+					</section>
+
+					<!-- JOIN SESSION -->
+					<section
+						class="flex flex-col gap-4 rounded-lg border border-neutral-950/20 bg-amber-100 overflow-hidden shadow-lg w-full"
+					>
+						<header class="flex flex-col px-6 py-4 border-b border-neutral-950/20 bg-amber-200">
+							<h2 class="font-bold">Join Existing Session</h2>
+						</header>
+
+						<div class="flex flex-col gap-4 px-6">
+							<div class="flex flex-col gap-2">
+								<label>Session Code:</label>
+
+								<input
+									class="font-mono border border-neutral-950/20 rounded-md px-3 py-1 placeholder-amber-950/50 focus:bg-amber-50/75"
+									type="text"
+									name="joinCode"
+									x-model="joinCode"
+									placeholder="6-digit code"
+								/>
+							</div>
+
+							<div class="flex flex-col gap-2">
+								<label>Your Display Name (optional):</label>
+								<input
+									type="text"
+									x-model="displayName"
+									name="displayName"
+									placeholder="Alice, Bob, etc."
+									class="font-mono border border-neutral-950/20 rounded-md px-3 py-1 placeholder-amber-950/50 focus:bg-amber-50/75"
+								>
+							</div>
+						</div>
+
+						<footer
+							class="flex flex-col gap-4 items-center justify-center py-4 border-t border-neutral-950/20 mt-auto"
+						>
+							<button
+								class="bg-rose-500 px-3 py-2 cursor-pointer font-bold rounded-md text-amber-50 flex flex-row gap-2 items-center justify-center hover:bg-rose-700"
+								@click="join"
+								x-disabled="!joinCode"
+							>
+								<img src="/icons/icon-add.svg" alt="Join Session" class="w-3 h-3" />
+								Join Session
+							</button>
+						</footer>
+					</section>
+				</div>
+			</template>
+
+			<template
+				x-if="joinedSession"
+			>
+				<div class="flex flex-col items-center justify-center gap-2">
+					<div class="text-center">
+						<h2 class="text-xl font-bold">Session: <span x-text="sessionCode"></span></h2>
+						<p>Your Participant ID: <strong x-text="participantId"></strong></p>
+					</div>
+
+					<section
+						class="flex flex-col gap-4 rounded-lg border border-neutral-950/20 bg-amber-100 overflow-hidden shadow w-full max-w-2xl mx-auto"
+					>
+						<div style="border:1px solid #ccc; padding:1rem; margin-bottom:1rem;">
+							<h3>Active Session Participants</h3>
+							<ul>
+								<template x-for="(name, pid) in participants" :key="pid">
+									<li x-show="pid !== participantId">
+										<strong x-text="name"></strong>
+										<template x-if="messagesSent[pid]">
+											<span style="color: green; margin-left:1rem;">(Message sent)</span>
+										</template>
+										<template x-if="!messagesSent[pid]">
+											<button @click="sendMessageTo(pid)">Send Warm Shower</button>
+										</template>
+									</li>
+								</template>
+							</ul>
+						</div>
+
+						<!-- RECEIVED MESSAGES -->
+						<div style="border:1px solid #ccc; padding:1rem; margin-bottom:1rem;">
+							<h3>Messages You Have Received</h3>
+							<ul>
+								<template x-for="(msg, idx) in incomingMessages" :key="idx">
+									<li>
+										<strong>Anonymous: </strong>
+										<span x-text="msg.text"></span>
+									</li>
+								</template>
+							</ul>
+						</div>
+
+						<!-- END SESSION (Optional) -->
+						<button style="background-color:red; color:white;" @click="endSession">
+							End Session
+						</button>
+
+					</section>
+				</div>
+			</template>
+		</main>
+
+		<script type="module" src="src/main.ts"></script>
+	</body>
+</html>
