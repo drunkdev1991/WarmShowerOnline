@@ -181,22 +181,33 @@ function warmShowerApp (): AlpineComponent<any> {
 			}
 		},
 
-		// ====== END SESSION ======
+				// ====== END SESSION ======
 		async endSession () {
-			console.log("[Client] endSession() called")
+			console.log("[Client] endSession() called");
+
+
+			// Show confirmation prompt
+			const userInput = window.prompt("CAUTION! Typing 'YES' will purge the session. This action cannot be undone AND WILL KILL THE SESSION FOR ALL PARTICIPANTS! Use only after Session is finished for everybody!");
+			
+			if (userInput !== "YES") {
+				console.log("[Client] Session end cancelled by user.");
+				alert("Session end aborted. You must type 'YES' to confirm.");
+				return;
+			}
 			try {
-				const res = await fetchApi(`/api/session/${ this.sessionCode }/end`, { method: "POST" })
+				const res = await fetchApi(`/api/session/${ this.sessionCode }/end`, { method: "POST" });
 				if (!res.ok) {
-					const errData = await res.json()
-					alert("Failed to end session: " + (errData.error || "Unknown"))
-					return
+					const errData = await res.json();
+					alert("Failed to end session: " + (errData.error || "Unknown"));
+					return;
 				}
-				alert("Session ended. All data purged.")
-				window.location.reload()
+				alert("Session ended. All data purged.");
+				window.location.reload();
 			} catch (error) {
-				console.error("[Client] Error in endSession():", error)
+				console.error("[Client] Error in endSession():", error);
 			}
 		},
+
 	}
 }
 
